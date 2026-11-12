@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="seabed"></div>
 <pre id="food">*</pre>
 <script>
 (() => {
@@ -18,10 +19,86 @@
   const SIGHT = 110;     // how far a fish can see its neighbours
   const PERSONAL = 38;   // how close is too close
   const MAX_TILT = 0.2;  // radians
-  const STUN_MS = 2000;  // how long a fish stays dazed after bumping the cursor
-  const REJOIN_MS = 4000; // how long it then hurries back to the school
+  const STUN_MS = 4000;  // how long a fish stays dazed after bumping the cursor
+  const REJOIN_MS = 6000; // longest it will hurry back to the school for
+  const REJOIN_SPEED = 2; // top speed while hurrying back, as a multiple of normal
 
-  const W = () => innerWidth, H = () => innerHeight;
+  // ---- Seabed: sand along the bottom with plants, rocks and shells on it. ----
+  const seabed = document.getElementById("seabed");
+  let sandTop = 0; // height of the sand, so the fish know where the floor is
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+
+  const SHAPES = {
+    weed: () => {   // wavy seaweed, a zigzag of ( and )
+      const n = Math.floor(rand(3, 9));
+      return Array.from({ length: n }, (_, i) => (i % 2 ? "(" : " )")).join("\n");
+    },
+    kelp: () => {   // tall kelp with leaves off a stem
+      const n = Math.floor(rand(6, 12));
+      return [" ."].concat(Array.from({ length: n }, (_, i) => (i % 2 ? "\\|" : " |/"))).join("\n");
+    },
+    coral: () => pick([
+      "\\ | /\n \\|/\n  |",
+      " Y  Y\n \\ /\n  |",
+      "\\\\ //\n \\|/\n  |",
+    ]),
+    rock: () => pick([
+      "  ___\n /   \\_\n/      \\",
+      " .--.\n(    )",
+      "  _\n_/ \\__",
+    ]),
+    shell: () => pick(["@", "6", "S"]),
+    star: () => "*",
+  };
+  const KINDS = ["weed", "weed", "weed", "weed", "kelp", "kelp", "coral", "coral", "rock", "rock", "shell", "star"];
+
+  function buildSeabed() {
+    seabed.textContent = "";
+    // Sand: three rows, getting denser and darker towards the bottom.
+    const probe = document.createElement("pre");
+    probe.className = "sand";
+    probe.textContent = "MMMMMMMMMM";
+    probe.style.display = "inline-block";
+    probe.style.width = "auto";
+    seabed.appendChild(probe);
+    const charW = probe.getBoundingClientRect().width / 10 || 8;
+    const cols = Math.ceil(innerWidth / charW) + 2;
+    probe.remove();
+    const row = (chars, density) =>
+      Array.from({ length: cols }, () => (Math.random() < density ? pick(chars) : " ")).join("");
+    const sand = document.createElement("pre");
+    sand.className = "sand";
+    [[".,`'", 0.18, "sand-1"], ["._,-~'`", 0.55, "sand-2"], ["~=_.-,", 0.9, "sand-3"]].forEach(([chars, d, cls]) => {
+      const line = document.createElement("span");
+      line.className = cls;
+      line.textContent = row(chars, d) + (cls === "sand-3" ? "" : "\n");
+      sand.appendChild(line);
+    });
+    seabed.appendChild(sand);
+    sandTop = sand.getBoundingClientRect().height;
+
+    // Things sitting on the sand, spaced out across the width.
+    for (let x = rand(5, 40); x < innerWidth - 10; x += rand(35, 110)) {
+      const kind = pick(KINDS);
+      const el = document.createElement("pre");
+      el.className = `thing ${kind}`;
+      el.textContent = SHAPES[kind]();
+      el.style.left = `${x}px`;
+      el.style.bottom = `${sandTop - 4}px`;
+      if (kind === "weed" || kind === "kelp") {
+        el.style.animationDuration = `${rand(3, 6).toFixed(2)}s`;
+        el.style.animationDelay = `${(-rand(0, 6)).toFixed(2)}s`;
+        if (Math.random() < 0.4) el.classList.add("dark");
+      }
+      seabed.appendChild(el);
+    }
+  }
+  buildSeabed();
+  addEventListener("resize", buildSeabed);
+
+  // The fish swim in the water above the sand.
+  const W = () => innerWidth, H = () => innerHeight - sandTop;
   const count = Math.round(Math.min(40, Math.max(14, (W() * H()) / 35000)));
 
   // A slowly drifting point the school loosely follows, made from layered sines
@@ -115,6 +192,7 @@
       if (mouse.on && now >= f.stunUntil &&
           Math.abs(mouse.x - f.x) < w / 2 + 2 && Math.abs(mouse.y - f.y) < h / 2 + 2) {
         f.stunUntil = now + STUN_MS;
+        f.rejoin = true;
         const kx = f.x - mouse.x, ky = f.y - mouse.y, kd = Math.hypot(kx, ky) || 1;
         f.vx = (kx / kd) * 1.5; f.vy = (ky / kd) * 1.5;
       }
@@ -150,10 +228,17 @@
       ax += (goal.x - f.x) * pull;
       ay += (goal.y - f.y) * pull;
 
-      // Just woke up from a stun: hurry back to the school.
-      if (f.stunUntil && now < f.stunUntil + REJOIN_MS && healthy) {
+      // Just woke up from a stun: dash back to the school faster than normal,
+      // and settle back to normal speed once it's back with the others.
+      let boost = 1;
+      if (f.rejoin && healthy) {
         const rx = schoolX - f.x, ry = schoolY - f.y, rd = Math.hypot(rx, ry);
-        if (rd > 60) { ax += (rx / rd) * 0.08; ay += (ry / rd) * 0.08; }
+        if (rd > 60 && now < f.stunUntil + REJOIN_MS) {
+          ax += (rx / rd) * 0.12; ay += (ry / rd) * 0.12;
+          boost = REJOIN_SPEED;
+        } else {
+          f.rejoin = false;
+        }
       }
 
       // Turn gently away from the edges.
@@ -170,7 +255,7 @@
       f.vy += ay * dt;
       f.vy *= 0.985; // fish prefer swimming level
 
-      const max = MAX_SPEED * f.pace;
+      const max = MAX_SPEED * f.pace * boost;
       let sp = Math.hypot(f.vx, f.vy);
       if (sp > max) { f.vx *= max / sp; f.vy *= max / sp; sp = max; }
       if (sp < MIN_SPEED) { const k = MIN_SPEED / (sp || 1); f.vx *= k; f.vy *= k; sp = MIN_SPEED; }

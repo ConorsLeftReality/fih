@@ -13,3 +13,50 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; cursor
   color: #fff; font: 9px ui-monospace, Consolas, Menlo, monospace;
   pointer-events: none; user-select: none;
 }
+
+/* ---- Seabed ---- */
+:root {
+  --sand-light: #d9c08c;
+  --sand: #b8955a;
+  --sand-dark: #7a5f36;
+  --weed: #3fae5a;
+  --weed-dark: #23753a;
+  --kelp: #6b8f2a;
+  --coral: #ff6f61;
+  --rock: #8a8f98;
+  --shell: #f4a6c6;
+  --star: #ffb347;
+}
+
+#seabed {
+  position: fixed; left: 0; right: 0; bottom: 0; height: 0;
+  pointer-events: none; user-select: none;
+}
+#seabed pre { margin: 0; font: 14px/1.1 ui-monospace, Consolas, Menlo, monospace; }
+
+.sand { position: absolute; left: 0; bottom: 0; white-space: pre; overflow: hidden; width: 100%; }
+.sand-1 { color: var(--sand-light); }
+.sand-2 { color: var(--sand); }
+.sand-3 { color: var(--sand-dark); }
+
+.thing { position: absolute; white-space: pre; }
+.weed  { color: var(--weed); }
+.weed.dark, .kelp.dark { color: var(--weed-dark); }
+.kelp  { color: var(--kelp); }
+.coral { color: var(--coral); }
+.rock  { color: var(--rock); }
+.shell { color: var(--shell); }
+.star  { color: var(--star); }
+
+/* Seaweed and kelp sway from their roots. */
+.weed, .kelp {
+  transform-origin: bottom center;
+  animation: sway 4s ease-in-out infinite alternate;
+}
+@keyframes sway {
+  from { transform: skewX(-7deg); }
+  to   { transform: skewX(7deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .weed, .kelp { animation: none; }
+}

@@ -1,6 +1,6 @@
 # fih
 
-A school of tiny ASCII fish `><((o>` swims around a black screen. Move your mouse in and they follow the food; bump one and it gets stunned for a moment.
+A school of tiny ASCII fish `><((o>` swims over a coloured ASCII seabed. Move your mouse in and they follow the food; bump one and it gets stunned for a moment.
 
 ## Run locally
 
